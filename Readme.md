@@ -1,4 +1,4 @@
-## Store CAN data from solar box into db
+## Send and receive message via ThingSet protocol over CAN
 
 ### Create CAN socket
 ``` shell
@@ -17,7 +17,7 @@ cansend vcan0 012#deadbeef
 In directory with requirements.txt:
 
 ``` shell
-virtualenv -p python3 .cantodb
+virtualenv -p python3 .thingset
 source .cantodb/bin/activate
 pip install -r requirements.txt
 ```
@@ -28,7 +28,7 @@ deactivate
 
 ### Usage:
 ``` shell
-python cantodb.py vcan0
+python thingset.py vcan0
 ```
 You should see decoded cbor data
 
