@@ -1,5 +1,6 @@
 # Python virtualenv stuff
 .thingset/
+.thingset36/
 .env
 
 # Byte-compiled / optimized / DLL files

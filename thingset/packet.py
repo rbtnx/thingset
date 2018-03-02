@@ -1,4 +1,8 @@
+from socket import CAN_EFF_FLAG
+
 class TSPacket(object):
+    TS_FRAME_FLAG = int.from_bytes(b'\x00\x00\x00\x01', 'little')
+
     def __init__(self, source=0, timestamp=0.0):
         self.source = source
         self.timestamp = timestamp
@@ -47,7 +51,7 @@ class PublicationFrame(TSPacket):
 
 
 class Single(PublicationFrame):
-    SINGLE_FRAME_MASK = int.from_bytes(b'\x00\x00\x00\x00\x00\x00\x00\x80', 'little')
+    SINGLE_DATA_FLAG = int.from_bytes(b'\x00\x00\x00\x00\x00\x00\x00\x80', 'little')
     SINGLE_ID_MASK = int.from_bytes(b'\x00\x00\x00\x03','little')
 
     def __init__(self, data=None, dataobjectID=0, priority=6, source=0, timestamp=0.0):
@@ -58,12 +62,22 @@ class Single(PublicationFrame):
         self.source = source
         self.timestamp = timestamp
 
+    def parseIdentifier(self, identifier):
+        if not isinstance(identifier, int):
+            raise ValueError("Identifier must be integer, not {}.".format(identifier))
+        if identifier >= (CAN_EFF_FLAG >> 2):
+            raise ValueError("Identifier too big. Cannot contain more than 29 bits")
+        if not (identifier & TSPacket.TS_FRAME_FLAG):
+            raise ValueError("Not a publication message.")
+        self.priority = identifier >> 26
+        self.dataobjectID = (identifier & 16777215) >> 8
+        self.source = identifier & 255
+
     @property
     def identifier(self):
         id_prio = self._priority << 26
         id_doid = self._dataobjectID << 8
-        id_raw = id_prio | self.SINGLE_ID_MASK | id_doid | self.source 
-        return id_raw.to_bytes(4, 'big')
+        return id_prio | self.SINGLE_ID_MASK | id_doid | self.source 
 
     @property
     def data(self):
@@ -86,6 +100,6 @@ class Single(PublicationFrame):
         elif not isinstance(data, bytes):
             raise TypeError("Wrong data type. Must be bytes, not {}".format(type(data)))
         bits = int.from_bytes(data, byteorder='little')
-        if (bits & self.SINGLE_FRAME_MASK) or (len(data) > 8):
+        if (bits & self.SINGLE_DATA_FLAG) or (len(data) > 8):
             raise ValueError("Data too big for single frame. Msg can contain up to 63 Bits")
         self._data = data

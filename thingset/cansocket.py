@@ -1,5 +1,6 @@
 import socket
 import struct
+from thingset.packet import TSPacket, Single
 
 class CANsocket(object):
     FMT = '<IB3x8s'
@@ -12,9 +13,13 @@ class CANsocket(object):
         packet = self.s.recv(64)
         can_id, length, data = struct.unpack(self.FMT, packet)
         can_id &= socket.CAN_EFF_MASK
-        return(can_id, data[:length])
+        if (can_id & TSPacket.TS_FRAME_FLAG):
+            frame = Single(data=data)
+            frame.parseIdentifier(can_id)
 
-    def send(self, can_id, data):
-        can_id = can_id | socket.CAN_EFF_FLAG
-        can_packet = struct.pack(self.FMT, can_id, len(data), data)
+        return(frame)
+
+    def send(self, message):
+        can_id = message.identifier | socket.CAN_EFF_FLAG
+        can_packet = struct.pack(self.FMT, can_id, len(message.data), message.data)
         self.s.send(can_packet)
