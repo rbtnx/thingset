@@ -169,6 +169,8 @@ typings/
 # next.js build output
 .next
 
-foxbot.pem
 .vscode/
 website/static/assets/
+
+# internal testdata
+data/

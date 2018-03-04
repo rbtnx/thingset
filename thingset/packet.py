@@ -1,7 +1,8 @@
 from socket import CAN_EFF_FLAG
+from cbor2 import loads
 
 class TSPacket(object):
-    TS_FRAME_FLAG = int.from_bytes(b'\x00\x00\x00\x01', 'little')
+    TS_FRAME_FLAG = (1 << 24)
 
     def __init__(self, source=0, timestamp=0.0):
         self.source = source
@@ -50,12 +51,12 @@ class PublicationFrame(TSPacket):
         self._dataobjectID = dataobjectID
 
 
-class Single(PublicationFrame):
-    SINGLE_DATA_FLAG = int.from_bytes(b'\x00\x00\x00\x00\x00\x00\x00\x80', 'little')
-    SINGLE_ID_MASK = int.from_bytes(b'\x00\x00\x00\x03','little')
+class SingleFrame(PublicationFrame):
+    SINGLE_ID_MASK = (0b11 << 24)
 
     def __init__(self, data=None, dataobjectID=0, priority=6, source=0, timestamp=0.0):
         super().__init__()
+        self._cbor = None
         self.data = data
         self.dataobjectID = dataobjectID
         self.priority = priority
@@ -70,18 +71,14 @@ class Single(PublicationFrame):
         if not (identifier & TSPacket.TS_FRAME_FLAG):
             raise ValueError("Not a publication message.")
         self.priority = identifier >> 26
-        self.dataobjectID = (identifier & 16777215) >> 8
-        self.source = identifier & 255
+        self.dataobjectID = (identifier & 0xffffff) >> 8
+        self.source = identifier & 0xff
 
     @property
     def identifier(self):
         id_prio = self._priority << 26
         id_doid = self._dataobjectID << 8
         return id_prio | self.SINGLE_ID_MASK | id_doid | self.source 
-
-    @property
-    def data(self):
-        return self._data
 
     @property
     def priority(self):
@@ -93,13 +90,25 @@ class Single(PublicationFrame):
             raise ValueError("Priority must be 4, 5 or 6 for publication frame (got: {}).".format(priority))
         self._priority = priority
 
+    @property
+    def data(self):
+        return self._data
+
     @data.setter
     def data(self, data):
         if data is None:
             self._data = bytes()
         elif not isinstance(data, bytes):
             raise TypeError("Wrong data type. Must be bytes, not {}".format(type(data)))
-        bits = int.from_bytes(data, byteorder='little')
-        if (bits & self.SINGLE_DATA_FLAG) or (len(data) > 8):
-            raise ValueError("Data too big for single frame. Msg can contain up to 63 Bits")
-        self._data = data
+        if data[0] >= 64:
+            raise ValueError("Data fromat wrong. First byte cannot be > 0x3F (got: {})".format(hex(data[0])))
+        if data[0] >= 32:
+            cborByte = ((data[0] & 0x18) << 1) + (data[0] & 0x07) + 0xC0
+        else:
+            cborByte = ((data[0] & 0x1C) << 3) + (data[0] & 0x03) + 0x18
+        self._data = bytes.fromhex(hex(cborByte)[2:] + data.hex()[2:])
+        self._cbor = loads(self._data)
+
+    @property
+    def cbor(self):
+        return self._cbor
